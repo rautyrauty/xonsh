@@ -130,6 +130,11 @@ def _patch_in_userdir():
 def _get_installed_xontribs(pkg_name="xontrib"):
     """List all core packages + newly installed xontribs"""
     _patch_in_userdir()
+    # Drop importlib's path-finder caches first: a xontrib installed
+    # mid-session (or written by a test) lands in a directory whose
+    # listing importlib may already have cached, and on a filesystem with
+    # coarse mtime resolution the new file would otherwise stay invisible.
+    importlib.invalidate_caches()
     spec = importlib.util.find_spec(pkg_name)
 
     def iter_paths():
@@ -176,6 +181,11 @@ def _find_xontrib_entrypoint(name):
 def find_xontrib(name, full_module=False):
     """Finds a xontribution from its name."""
     _patch_in_userdir()
+    # A xontrib may have been installed after the interpreter started.
+    # importlib's path finders cache directory listings keyed by mtime, so
+    # on a filesystem with coarse mtime resolution a freshly written
+    # xontrib can stay invisible to find_spec(); drop those caches first.
+    importlib.invalidate_caches()
 
     # Order matters. Try the cheap, exact paths first; fall through to
     # broader matches only when the previous lookup did not find anything.

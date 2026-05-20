@@ -1,10 +1,13 @@
 """xontrib tests, such as they are"""
 
+import importlib
 import sys
 
 import pytest
 
 from xonsh.xontribs import (
+    find_xontrib,
+    get_xontribs,
     xontrib_context,
     xontribs_load,
     xontribs_loaded,
@@ -97,6 +100,47 @@ hello = 'world'
 
     xontribs_load(["script"])
     assert "script" in xontribs_loaded()
+
+
+def test_find_xontrib_invalidates_import_caches(monkeypatch):
+    """``find_xontrib`` drops importlib's path-finder caches before it
+    resolves a xontrib.
+
+    A xontrib installed after the interpreter started lands in a
+    directory whose listing importlib may already have cached;
+    ``FileFinder`` keys that cache by directory mtime, so on a filesystem
+    with coarse mtime resolution the freshly written xontrib can stay
+    invisible to ``find_spec()``. Regression for an arch/filesystem
+    dependent flake in xontrib discovery (``xontrib load`` silently
+    loaded nothing).
+    """
+    calls = []
+    real = importlib.invalidate_caches
+
+    def spy():
+        calls.append(True)
+        real()
+
+    monkeypatch.setattr(importlib, "invalidate_caches", spy)
+    find_xontrib("a_xontrib_that_does_not_exist_xyz")
+    assert calls, "find_xontrib must invalidate importlib caches"
+
+
+def test_get_xontribs_invalidates_import_caches(monkeypatch):
+    """``get_xontribs`` -- the discovery path behind ``xontrib list`` and
+    ``xontrib info`` -- also drops importlib's path-finder caches; see
+    ``test_find_xontrib_invalidates_import_caches``.
+    """
+    calls = []
+    real = importlib.invalidate_caches
+
+    def spy():
+        calls.append(True)
+        real()
+
+    monkeypatch.setattr(importlib, "invalidate_caches", spy)
+    get_xontribs()
+    assert calls, "get_xontribs must invalidate importlib caches"
 
 
 def test_xontrib_unload(tmpmod, xession):
